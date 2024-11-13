@@ -1,9 +1,14 @@
+// sh_lib.c
+
 #include "user/sh_lib.h"
 #include "kernel/defs.h"
 #include "kernel/fcntl.h"
 #include "user/sh_util.h"
 #include "user/user.h"
+#include <string.h>
+#include <stdlib.h>
 
+// Proxy-Funktion zum Ausführen von Befehlen
 void run_proxy(struct cmd *cmd)
 {
     if (run_cmd(cmd) != 0) {
@@ -12,27 +17,41 @@ void run_proxy(struct cmd *cmd)
     exit(EXIT_SUCCESS);
 }
 
-// Do magic ╰( ͡° ͜ʖ ͡° )つ──☆*:
+// Implementierung der run_cmd Funktion
 int run_cmd(struct cmd *cmd)
 {
-    // TODO: Pointer to struct could be invalid, perform a check with output according to the problem statement.
-	
-  	// EXEC is the only command type right now.
-    if (cmd->type == EXEC) {
-        // TODO: Cast the command to exec_cmd.
-        // TODO: Call exec and handle errors to the problem statement. Keep in mind that exec does not return if it is successful.
-        // Hint: the struct exec_cmd defined in sh_lib.h already contains all the necessary arguments for calling exec.
-      	return EXIT_FAILURE;
+    // Überprüfen, ob der cmd-Zeiger gültig ist
+    if (cmd == NULL) {
+        fprintf(STD_ERR, "Received empty command\n");
+        return EXIT_FAILURE;
     }
-    
+
+    // EXEC ist der einzige Befehlstyp
+    if (cmd->type == EXEC) {
+        struct exec_cmd *exec_cmd = (struct exec_cmd *)cmd;
+
+        // Überprüfen, ob der Pfad zum Programm vorhanden ist
+        if (exec_cmd->path == NULL || exec_cmd->path[0] == '\0') {
+            fprintf(STD_ERR, "No program to execute\n");
+            return EXIT_FAILURE;
+        }
+
+        // Aufruf von exec
+        if (exec(exec_cmd->path, exec_cmd->argv) < 0) {
+            fprintf(STD_ERR, "exec failed for %s\n", exec_cmd->path);
+            return EXIT_FAILURE;
+        }
+
+        // exec kehrt nicht zurück, wenn erfolgreich
+        return EXIT_FAILURE;
+    }
+
     fprintf(STD_ERR, "Unknown command type\n");
-    // Note: run_cmd should return 0 (EXIT_SUCCESS) for success, and 1 (EXIT_FAILURE) for failure.
     return EXIT_FAILURE;
 }
 
-// "Constructor" for a cmd of type EXEC
-struct cmd*
-exec_cmd(void)
+// "Constructor" für einen EXEC-Befehl
+struct cmd* exec_cmd_create(char *path, char **argv)
 {
     struct exec_cmd* cmd = malloc(sizeof(*cmd));
 
@@ -42,21 +61,22 @@ exec_cmd(void)
 
     memset(cmd, 0, sizeof(*cmd));
     cmd->type = EXEC;
+    cmd->path = path;
+    cmd->argv = argv;
     return (struct cmd*) cmd;
 }
 
-// Executes the shell forever
+// Führt die Shell endlos aus
 void run_shell()
 {
     static char buf[BUFFER_SIZE];
     
-    // Read and run input commands.
+    // Liest und führt Eingabebefehle aus
     while (getcmd(buf, sizeof(buf)) >= 0) {
-        // Before calling run_cmd we check for commands that the shell itself can execute
-        // If the user enters chdir, switch directories,
+        // Überprüfen auf Shell-eigene Befehle wie 'cd'
         if (!strncmp(buf, "cd ", 3)) {
-            // Chdir must be called by the parent, not the child.
-            buf[strlen(buf) - 1] = 0;  // chop \n
+            // Chdir muss vom Elternprozess aufgerufen werden, nicht vom Kind
+            buf[strlen(buf) - 1] = 0;  // '\n' abschneiden
 
             if (chdir(buf + 3) < 0) {
                 fprintf(STD_ERR, "cannot cd %s\n", buf + 3);
@@ -65,7 +85,7 @@ void run_shell()
         }
 
         if (fork1() == 0) {
-            // Otherwise we create a child and use it to execute the given command
+            // Andernfalls erstellen wir ein Kind und führen den Befehl aus
             run_proxy(parsecmd(buf));
         }
 
@@ -73,7 +93,7 @@ void run_shell()
     }
 }
 
-// Prints the prompt and waits for user input
+// Gibt das Prompt aus und wartet auf Benutzereingabe
 int getcmd(char* buf, int nbuf)
 {
     fprintf(STD_ERR, "$ ");
@@ -87,7 +107,7 @@ int getcmd(char* buf, int nbuf)
     return EXIT_SUCCESS;
 }
 
-// Ensure that three file descriptors are open
+// Stellt sicher, dass drei Dateideskriptoren geöffnet sind
 void check_fds()
 {
     int fd;
@@ -100,7 +120,7 @@ void check_fds()
     }
 }
 
-// Fork with panic in case of an error
+// Fork mit Panic im Fehlerfall
 int fork1(void)
 {
     int pid;
@@ -113,6 +133,7 @@ int fork1(void)
     return pid;
 }
 
+// Panic-Funktion für Fehlerausgaben
 void panic(char* s)
 {
     fprintf(STD_ERR, "%s\n", s);

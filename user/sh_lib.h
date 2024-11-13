@@ -1,32 +1,33 @@
-#pragma once
+// sh_lib.h
+
+#ifndef SH_LIB_H
+#define SH_LIB_H
 
 #include "kernel/types.h"
 
-#define MAXARGS 10
-#define BUFFER_SIZE 100 // Maximum input length
+#define BUFFER_SIZE 100
+#define EXEC 1
 
-// A command can only have the types EXEC or INVALID
-#define INVALID 0
-#define EXEC    1
+enum cmd_type { 
+    CMD_EXEC 
+};
 
-// Parsed command representation
+// Basisstruktur für Befehle
 struct cmd {
-  int type;
+    enum cmd_type type;
 };
 
+// Struktur für EXEC-Befehl
 struct exec_cmd {
-  int type;
-  char *argv[MAXARGS];
-  char *eargv[MAXARGS];
+    enum cmd_type type;
+    char *path;       // Pfad zum ausführenden Programm
+    char **argv;      // Argumente für das Programm
 };
 
-int getcmd(char *buf, int nbuf);
-int fork1(void);  // Fork but panics on failure.
-int run_cmd(struct cmd *cmd); // Performs an action for a given command
+// Funktion zum Parsen von Befehlen (angenommen, du hast eine parsecmd-Funktion)
+struct cmd* parsecmd(char *s);
 
-void run_proxy(struct cmd* cmd);
-void run_shell();
-void check_fds(); // Checks availability of file descriptors
-void panic(char*);
+// Funktion zum Erstellen eines EXEC-Befehls
+struct cmd* exec_cmd_create(char *path, char **argv);
 
-struct cmd *exec_cmd(void); // Builds an exec command
+#endif // SH_LIB_H
